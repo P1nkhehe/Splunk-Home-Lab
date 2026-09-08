@@ -13,9 +13,9 @@
 
 # Splunk SOC Home Lab — SIEM Detection & Alerting
 
-<span style="color:#d33">A hands-on security operations home lab: deploy Splunk as a SIEM, forward endpoint telemetry from a monitored Windows host, simulate a brute-force attack, detect it with SPL, and automatically alert on it — with notifications pushed to Discord.</span>
+<span style="color:#d33">A hands-on security operations home lab: utilizing Splunk as a SIEM, forwarding telemetry from a monitored Windows host, then simulating a brute-force attack, detect it with SPL, and automatically alert on it making use of notifications pushed to Discord.</span>
 
-<span style="color:#d33">**Skills demonstrated:** SIEM deployment · log forwarding · Sysmon telemetry · SPL (Search Processing Language) · detection engineering · scheduled alerting · MITRE ATT&CK mapping · alert integration via webhook.</span>
+<span style="color:#d33">**Skills demonstrated:** SIEM deployment · log forwarding · Sysmon telemetry · SPL (Search Processing Language) · basic detection engineering · scheduled alerting · Mapped detection to MITRE ATT&CK (T1110) · alert integration via webhook.</span>
 
 ---
 
@@ -130,7 +130,7 @@ Then create a `password.txt` file to serve as our payload; include false passwor
 
 From this we can conclude it does not resemble a normal user login: the "user" logged off shortly afterwards, which does not resemble a human doing work at a desk. This reflects the action of Hydra — it tested multiple passwords, and once it returned a successful login, it dropped the session.
 
-<span style="color:#d33">**Note — a field quirk worth documenting:** when grouping the 4625 events by `Account_Name`, three values appeared: `CLIENT1`, `-` (a blank placeholder), and `DESKTOP-1T4FB0H` (the machine account). Counterintuitively, `-` had the highest count, not `CLIENT1`. Inspecting the raw events showed that a single failed RDP attempt can generate multiple 4625 events under different subject contexts (the pre-authentication stage logs `-` because no username has resolved yet). The takeaway: the highest count in a field is not automatically the most meaningful value — what identified the attack was the time-clustered volume of failures on the host, not any single account name.</span>
+
 
 ### Detecting the brute force with SPL
 
@@ -226,7 +226,7 @@ Once set up, you receive a message on your Discord, and you now have a fully wor
 
 ## <span style="color:#d33">Key takeaways</span>
 
-<span style="color:#d33">This lab covers the full detection lifecycle a Tier 1 SOC analyst works with: collecting telemetry (Sysmon + Windows Event Logs), forwarding it to a SIEM, writing detection logic in SPL, distinguishing an automated attack from normal user behaviour (time-clustered failure volume, not raw counts), turning that logic into an automated scheduled alert mapped to MITRE ATT&CK, and delivering the alert to where an analyst would actually see it.</span>
+<span style="color:#d33">This lab demonstrates a complete detection workflow end to end: collecting endpoint telemetry (Sysmon + Windows Event Logs), forwarding it to a SIEM, writing detection logic in SPL, distinguishing an automated attack from normal user behaviour (time-clustered failure volume, not raw counts), turning that logic into a scheduled alert mapped to MITRE ATT&CK (T1110), and routing the notification to where an analyst would see it. It reflects the core skills behind SOC detection and monitoring, built hands-on in an isolated lab.</span>
 
 ---
 
