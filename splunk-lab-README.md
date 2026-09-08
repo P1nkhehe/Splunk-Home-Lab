@@ -1,15 +1,4 @@
-<!-- ============================================================
-  REVIEW NOTE (delete this whole comment before publishing):
-  • Plain black text = taken from your own documentation, in your words
-    (lightly tidied for spelling/grammar only — meaning unchanged).
-  • RED text (wrapped in <span style="color:#d33">…</span>) = Claude's
-    own wording, structure, or additions — review and change as needed.
-  • Open README_REVIEW.html in a browser to see the red clearly.
-  • GitHub strips text colour, so on GitHub everything shows black.
-  • ⚠ SECURITY: never commit your real Discord webhook URL. It is a live
-    credential. It is shown as <YOUR_DISCORD_WEBHOOK_URL> below on purpose —
-    keep it that way, and redact it from any screenshots you upload.
-============================================================ -->
+
 
 # Splunk SOC Home Lab — SIEM Detection & Alerting
 
