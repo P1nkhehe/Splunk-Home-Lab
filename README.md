@@ -2,21 +2,21 @@
 
 # Splunk SOC Home Lab — SIEM Detection & Alerting
 
-<span style="color:#d33">A hands-on security operations home lab: utilizing Splunk as a SIEM, forwarding telemetry from a monitored Windows host, then simulating a brute-force attack, detect it with SPL, and automatically alert on it making use of notifications pushed to Discord.</span>
+A hands-on security operations home lab: utilizing Splunk as a SIEM, forwarding telemetry from a monitored Windows host, then simulating a brute-force attack, detect it with SPL, and automatically alert on it making use of notifications pushed to Discord.
 
-<span style="color:#d33">**Skills demonstrated:** SIEM deployment · log forwarding · Sysmon telemetry · SPL (Search Processing Language) · basic detection engineering · scheduled alerting · Mapped detection to MITRE ATT&CK (T1110) · alert integration via webhook.</span>
+**Skills demonstrated:** SIEM deployment · log forwarding · Sysmon telemetry · SPL (Search Processing Language) · basic detection engineering · scheduled alerting · Mapped detection to MITRE ATT&CK (T1110) · alert integration via webhook.
 
 ---
 
-## <span style="color:#d33">Lab Architecture</span>
+## Lab Architecture
 
-<span style="color:#d33">Three virtual machines on an isolated host-only network:</span>
+Three virtual machines on an isolated host-only network:
 
-| <span style="color:#d33">Role</span> | <span style="color:#d33">Machine</span> | <span style="color:#d33">Purpose</span> |
+| Role | Machine | Purpose |
 |------|---------|---------|
-| <span style="color:#d33">SIEM</span> | <span style="color:#d33">Splunk Enterprise VM</span> | <span style="color:#d33">Receives, indexes, and searches all logs; runs detections and alerts</span> |
-| <span style="color:#d33">Endpoint</span> | <span style="color:#d33">Windows VM (monitored host)</span> | <span style="color:#d33">The target being monitored and attacked; runs Sysmon + Universal Forwarder</span> |
-| <span style="color:#d33">Attacker</span> | <span style="color:#d33">Kali Linux VM</span> | <span style="color:#d33">Launches the simulated brute-force attack with Hydra</span> |
+| SIEM | Splunk Enterprise VM | Receives, indexes, and searches all logs; runs detections and alerts |
+| Endpoint | Windows VM (monitored host) | The target being monitored and attacked; runs Sysmon + Universal Forwarder |
+| Attacker | Kali Linux VM | Launches the simulated brute-force attack with Hydra |
 
 ![Lab architecture: Kali attacker to Windows endpoint (Sysmon + Universal Forwarder), forwarding logs on port 9997 to the Splunk SIEM, which fires a Discord alert](images/architecture-topology.png)
 
@@ -82,7 +82,7 @@ disabled = 0
 
 ### Breaking down the inputs.conf file
 
-`[WinEventLog://Security]` and `[WinEventLog://Microsoft-Windows-Sysmon/Operational]` are called **stanza headers**, and they define an **input**. Inputs are where we get our data from — a source of data to collect, hence "input." `WinEventLog://` is the input type: it tells the Splunk forwarder what to read. For this instance it tells the forwarder to read the Windows Event Log, and the `Security` right next to it specifies which specific event log to read. <span style="color:#d33">`disabled = 0` turns the input on (0 = not disabled = active).</span>
+`[WinEventLog://Security]` and `[WinEventLog://Microsoft-Windows-Sysmon/Operational]` are called **stanza headers**, and they define an **input**. Inputs are where we get our data from — a source of data to collect, hence "input." `WinEventLog://` is the input type: it tells the Splunk forwarder what to read. For this instance it tells the forwarder to read the Windows Event Log, and the `Security` right next to it specifies which specific event log to read. `disabled = 0` turns the input on (0 = not disabled = active).
 
 5. Install the Splunk app "Splunk Add-on for Sysmon". If everything is done correctly, you can now use the `index=*` command in the search bar to see if the machine you just added forwards new security events.
 
@@ -107,7 +107,7 @@ Then create a `password.txt` file to serve as our payload; include false passwor
 
 ### Results of the attack — event code notes
 
-| <span style="color:#d33">Event Code</span> | <span style="color:#d33">Meaning</span> |
+| Event Code | Meaning |
 |------------|---------|
 | 4634 | account logoff |
 | 5379 | Credential Manager credentials were read |
@@ -134,7 +134,7 @@ Dissecting the search query:
 
 - `index=* source="WinEventLog:Security" EventCode=4625` — we choose our index, the source, and the corresponding event code that reflects failed logins.
 - `| bucket _time span=2m` — bucket groups events by the condition you set; here `span=2m` means all events that happened within a 2-minute span are grouped together (that's why we get 1 result — without bucket, those events would be displayed separately).
-- `| stats count by _time, host` — <span style="color:#d33">groups the events by time bucket and host and counts how many fall in each group.</span>
+- `| stats count by _time, host` — groups the events by time bucket and host and counts how many fall in each group.
 - `| where count > 5` — keeps only groups where the count from the previous pipe is greater than 5.
 
 **Conclusion:** In a span of 2 minutes there were more than 5 failed login attempts — specifically 6 within 2 minutes or less. This does not resemble a human failed login; 6 failed password attempts in 2 minutes is not humanly likely unless a user intentionally spammed wrong passwords.
@@ -153,12 +153,12 @@ index=* source="WinEventLog:Security" EventCode=4625
 
 On the top right of the search, save the query as an alert, and add a title and description.
 
-**MITRE ATT&CK mapping —** <span style="color:#d33">T1110</span> is the technique associated with brute-force attacks. This includes:
+**MITRE ATT&CK mapping —** T1110 is the technique associated with brute-force attacks. This includes:
 
-- <span style="color:#d33">T1110.001</span>: Password Guessing
-- <span style="color:#d33">T1110.002</span>: Password Cracking
-- <span style="color:#d33">T1110.003</span>: Password Spraying
-- <span style="color:#d33">T1110.004</span>: Credential Stuffing
+- T1110.001: Password Guessing
+- T1110.002: Password Cracking
+- T1110.003: Password Spraying
+- T1110.004: Credential Stuffing
 
 Set the **time range to Last 5 minutes** — the alert runs every 5 minutes and looks at all failed logons within that timeframe that exceeded 5 attempts. The "more than 5" condition comes from the saved search query (`| where count > 5`).
 
@@ -176,9 +176,9 @@ In the Alerts tab we can see the alert caught a possible brute-force attempt. Ex
 
 ### Detection summary
 
-| <span style="color:#d33">Detection</span> | <span style="color:#d33">Data source</span> | <span style="color:#d33">Logic (SPL)</span> | <span style="color:#d33">MITRE ATT&CK</span> |
+| Detection | Data source | Logic (SPL) | MITRE ATT&CK |
 |-----------|-------------|-------------|--------------|
-| <span style="color:#d33">RDP / logon brute force</span> | <span style="color:#d33">`WinEventLog:Security` (EventCode 4625)</span> | <span style="color:#d33">`stats count by host \| where count > 5` (rolling 5-min window)</span> | <span style="color:#d33">T1110 — Brute Force</span> |
+| RDP / logon brute force | `WinEventLog:Security` (EventCode 4625) | `stats count by host \| where count > 5` (rolling 5-min window) | T1110 — Brute Force |
 
 ---
 
@@ -202,11 +202,11 @@ Dissecting the script:
 - **`-H "Content-Type: application/json"`** — the header, telling Discord that the content we're sending is in JSON format. This is needed so Discord knows how to read the message.
 - **`-d "{...}"`** — the data we're sending: the content we want to appear in Discord from our Splunk SIEM. The `content` field holds whatever text Discord displays.
 - The format looks the way it does because **JSON requires a "key": "value" pair**, wrapped in curly brackets — `{"key": "value"}`. In our case that's `{"content": "Possible RDP Brute Force detected..."}`.
-- The multiple **backslashes** are used to escape the quotation marks. Because the JSON (which uses quotes) is nested inside curl's own quoted `-d` argument, each inner quote must be escaped with `\` so it's treated as a literal character and the command runs correctly. <span style="color:#d33">(The URL keeps plain quotes because it isn't nested inside another quoted string.)</span>
+- The multiple **backslashes** are used to escape the quotation marks. Because the JSON (which uses quotes) is nested inside curl's own quoted `-d` argument, each inner quote must be escaped with `\` so it's treated as a literal character and the command runs correctly. (The URL keeps plain quotes because it isn't nested inside another quoted string.)
 
 ### Wiring the script into the alert
 
-1. Create a `.bat` script in Splunk's `bin\scripts` folder <span style="color:#d33">(`C:\Program Files\Splunk\bin\scripts` — create the `scripts` folder if it doesn't exist).</span>
+1. Create a `.bat` script in Splunk's `bin\scripts` folder (`C:\Program Files\Splunk\bin\scripts` — create the `scripts` folder if it doesn't exist).
 2. In the alert's trigger actions, select **Run a script** and choose the `.bat` file you just made.
 
 Once set up, you receive a message on your Discord, and you now have a fully working alert notification system.
@@ -215,12 +215,12 @@ Once set up, you receive a message on your Discord, and you now have a fully wor
 
 ---
 
-## <span style="color:#d33">Key takeaways</span>
+## Key takeaways
 
-<span style="color:#d33">This lab demonstrates a complete detection workflow end to end: collecting endpoint telemetry (Sysmon + Windows Event Logs), forwarding it to a SIEM, writing detection logic in SPL, distinguishing an automated attack from normal user behaviour (time-clustered failure volume, not raw counts), turning that logic into a scheduled alert mapped to MITRE ATT&CK (T1110), and routing the notification to where an analyst would see it. It reflects the core skills behind SOC detection and monitoring, built hands-on in an isolated lab.</span>
+This lab demonstrates a complete detection workflow end to end: collecting endpoint telemetry (Sysmon + Windows Event Logs), forwarding it to a SIEM, writing detection logic in SPL, distinguishing an automated attack from normal user behaviour (time-clustered failure volume, not raw counts), turning that logic into a scheduled alert mapped to MITRE ATT&CK (T1110), and routing the notification to where an analyst would see it. It reflects the core skills behind SOC detection and monitoring, built hands-on in an isolated lab.
 
 ---
 
-## <span style="color:#d33">⚠ Security & scope note</span>
+## ⚠ Security & scope note
 
-<span style="color:#d33">All attacks in this lab were performed against machines I own, inside an isolated host-only virtual network. Brute-force tooling should only ever be used against systems you have explicit permission to test. The Discord webhook URL in this documentation is a placeholder — the real URL is a live credential and is not committed to this repository.</span>
+All attacks in this lab were performed against machines I own, inside an isolated host-only virtual network. Brute-force tooling should only ever be used against systems you have explicit permission to test. The Discord webhook URL in this documentation is a placeholder — the real URL is a live credential and is not committed to this repository.
