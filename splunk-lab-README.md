@@ -18,7 +18,7 @@
 | <span style="color:#d33">Endpoint</span> | <span style="color:#d33">Windows VM (monitored host)</span> | <span style="color:#d33">The target being monitored and attacked; runs Sysmon + Universal Forwarder</span> |
 | <span style="color:#d33">Attacker</span> | <span style="color:#d33">Kali Linux VM</span> | <span style="color:#d33">Launches the simulated brute-force attack with Hydra</span> |
 
-<span style="color:#d33">📌 Add your architecture/topology diagram here — even a simple hand-drawn box diagram of the three VMs and the log flow (Endpoint → Forwarder → Splunk) makes this section much stronger.</span>
+![Lab architecture: Kali attacker to Windows endpoint (Sysmon + Universal Forwarder), forwarding logs on port 9997 to the Splunk SIEM, which fires a Discord alert](images/architecture-topology.png)
 
 ---
 
@@ -170,7 +170,9 @@ Back on the Kali VM, simulate a brute-force attack on the RDP of CLIENT1 again u
 
 In the Alerts tab we can see the alert caught a possible brute-force attempt. Expanding it with **View Results** shows what the alert found: the monitored client recorded 9 failed attempts within 5 minutes.
 
-<span style="color:#d33">📌 Add screenshots here: the triggered alert entry, and the View Results showing the failed-attempt count.</span>
+![Splunk Triggered Alerts showing the Possible Brute Force Attempt entry](images/12-triggered-alerts-list.png)
+
+![View Results: 9 failed logon events on the monitored host within the 5-minute window](images/14-alert-view-results.png)
 
 ### Detection summary
 
@@ -209,7 +211,7 @@ Dissecting the script:
 
 Once set up, you receive a message on your Discord, and you now have a fully working alert notification system.
 
-<span style="color:#d33">📌 Add a screenshot of the alert message landing in your Discord channel — this is the strongest visual in the whole project; it looks like a real SOC alert feed.</span>
+![Splunk alert delivered to the #splunk-alert Discord channel](images/17-discord-alert-received.png)
 
 ---
 
