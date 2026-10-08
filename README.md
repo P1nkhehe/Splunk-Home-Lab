@@ -141,6 +141,74 @@ Dissecting the search query:
 
 ---
 
+﻿---
+
+## Phase 4.5: Network Analysis of the Attack (Wireshark)
+
+<span style="color:red;">Before relying entirely on Splunk alerts, let's examine the attack from the network perspective using Wireshark.</span>
+
+Objective:  To capture the network traffic on a victim machine? That comes from a hydra attack from a linux vm?On wireshark we can see capture the traffic that goes in and out of the host, in this case the victim machine. 
+
+As you can see on the Src: 192.168.234.1 that's the ip of the machine we are currently using (victim machine)
+Now on the top part apply a display filter we'll type in tcp.port == 3389 This is so that we'll only capture traffic from the rdp as 3389 is the port responsible for rdp which is what the hydra brute force will attack,
+
+Currently empty as nothing is happening.
+
+<span style="color:red;">*(See Wireshark setup below)*</span>
+![Wireshark setup](images/wireshark-image1.png)
+
+Now lets commence the attack on our Linux VM
+
+<span style="color:red;">*(See Hydra attack initiated below)*</span>
+![Hydra attack initiated](images/wireshark-image2.png)
+
+And just as the attack happened our rdp port being monitored on wireshark suddenly got a surge of traffic.
+
+<span style="color:red;">*(See traffic surge below)*</span>
+![Traffic surge](images/wireshark-image3.png)
+
+Alright, now there is a lot to unpack here. Let's start with the obvious ones which are the time, source, and destination columns. The time is when the packet was captured, source is where it came from in our case it's the ip address of the kali vm (attacker), destination is where its going (the victim client). 
+
+We also see familiar terms on the info section such as the SYN, SYN-ACK, ACK or the three way handshake. Go gain better clarity on this we'll be using another filter.
+tcp.flags.syn == 1 && tcp.flags.ack == 0
+The reason we will be using this filter is we can specifically capture the packets from when the attacker tries to establish a connection. Our objective in using this filter is to identify how many times the attacker tried to establish a connection, in doing so we will be able to determine if it's just a false positive from a person forgetting or doing typos when inputting their password or if its from an automated tool which would send a barrage of requests on a short timespan.
+
+<span style="color:red;">*(See TCP SYN filter results below)*</span>
+![TCP SYN filter results 1](images/wireshark-image4.png)
+![TCP SYN filter results 2](images/wireshark-image5.png)
+
+Here we can see the results of the filter we created. Both images are the same results I just changed the formatting of the time so I can understand it better. The top image displays the time in seconds when the packet was first captured. 
+The key finding here is that during that short timeframe which is around 118 seconds or nearly 2 minutes in we had a client try to establish connection 20 times. It's also good to note the gap between each connection attempt is around 6 seconds, so everytime the connection attempt fails a new attempt is automatically made every 6 seconds. 
+
+From here we can deduce that this patter is consistent with the behavior of automated tools such as a brute force tool like hydra. Why? Other than the massive number of attempts on a short amount of time (20 attempts in less than 2 minutes) we can also see the gap between each attempt is consistently 6 seconds, which we can't attribute to normal user behavior. This type of consistency can only be attributed to the characteristics of tools or bots. It's also important to note that all connection attempts came from the same source IP meaning that what we have is a single attacker rather than distributed traffic.
+
+Now lets use another filter which will also give us the same results, but this filter is used specifically to see how many times did the attacker star a new encrypted RDP session. Although this will has the same concept from the previous comment this specifically is for when we want to confirm if the brute force is happening on the application layer  (RDP/TLS) rather than just at the tcp layer
+tls.handshake.type == 1
+Through the use of the tls.handshake.type == 1 filter we can see the initial message of every TLS handshake which happens whenever the attacker or another clients requests for an encrypted session. We can see "Client Hello" on the "Info" tab, which is what we put on the filter type:1 as 1 is the numeric code for client hello specifically. So just like the previous filter we used we are also able to identify here that the attacker tried to request an encrypted session 20 times over the span of 2 minutes.We can also see more information that will help us with our investigation by using the statistics tab on wireshark.
+
+<span style="color:red;">*(See TLS handshake filter results below)*</span>
+![TLS handshake filter results](images/wireshark-image6.png)
+
+Here we have the Conversations tool and I/O graph from the statistics tab. From the conversations tool we can see the same IP targeting the same port. And from the I/O graph we can see 20 spikes which are consistent with the brute force attempt of the attacker we observed from our filters earlier, its important to note that everything we see in the graph are all spikes which is akin to how an automated brute force tool would behave. 
+
+<span style="color:red;">*(See Wireshark statistics Conversations and I/O Graph below)*</span>
+![Wireshark statistics Conversations](images/wireshark-image7.png)
+![Wireshark statistics IO Graph](images/wireshark-image8.png)
+
+Now that we observed and identified that we are being brute forced from a network how do we actually see if they succeeded? Well we can check it through our Splunk of course as through the use of Sysmon and universal forwarded or event logs are automatically transported there. But in this case we can check it on Event Viewer. If we filter it by using the Event ID "4625" which is the event id for failed logins and correlate it with what we found in wireshark the 6 second gap before every attempt we can identify when it happened and then check using Event ID "4624" if the logon succeeded.
+
+<span style="color:red;">*(See Event viewer 4625 failed logins below)*</span>
+![Event viewer 4625 failed logins](images/wireshark-image9.png)
+
+Here we can see the attempts all failing, but now if we check using the Successful event ID we can identify if the attacker succeeded in their brute force attempt. The key is to look at the time and correlate the events that happened.The one highlighted which happened on 1:10:55AM correlates to when the attack happened and among all attempts this was the only one that passed, if you remember on the failed attempts the last failed attempt was during 1:10:49AM now 6 seconds after that and we get the timestamp of the successful login attempt, we can conclude that the attacker has successfully been able to brute force the device. And with the conclusion we now have we can act and put up security measures such as blocker the attackers ip, disabling the compromised account, or even better create a precautionary measure that locks out an account after a set number of failed attempts.
+
+<span style="color:red;">*(See Event viewer 4624 successful login below)*</span>
+![Event viewer 4624 successful login](images/wireshark-image10.png)
+![Event viewer highlighting times](images/wireshark-image11.png)
+
+On a side note, its important to know that in the event logs we can only see 19 logs 18 which failed and 1 which succeeded, we are missing 1. And this can be explained by the way hydra behaves, usually the first connection that hydra created is just the initial probe which tests if the port is open before it actually does any brute force attempts. That did not appear on the windows event viewer but wireshark was able to catch it as SYN which is why in wireshark we saw 20.
+
+
 ## Phase 5: Creating alerts instead of relying on manual searches
 
 Using the result from Phase 4, save the search query as an alert. Either the time-bucketed version, or a simpler version that doesn't use time:
