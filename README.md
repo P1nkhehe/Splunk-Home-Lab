@@ -4,21 +4,20 @@
 
 A hands-on security operations home lab: utilizing Splunk as a SIEM, forwarding telemetry from a monitored Windows host, then simulating a brute-force attack, detect it with SPL, and automatically alert on it making use of notifications pushed to Discord.
 
-**Skills demonstrated:** SIEM deployment · log forwarding · Sysmon telemetry · SPL (Search Processing Language) · basic detection engineering · scheduled alerting · Mapped detection to MITRE ATT&CK (T1110) · alert integration via webhook.
+**Skills demonstrated:** SIEM deployment · log forwarding · Sysmon telemetry · SPL (Search Processing Language) · basic detection engineering · scheduled alerting · Mapped detection to MITRE ATT&CK (T1110) · alert integration via webhook · <span style="color:red;">Wireshark analysis · incident documentation · Wazuh Active Response · API authentication · TLS certificates · RBAC</span>.
 
 ---
 
 ## Lab Architecture
 
-Three virtual machines on an isolated host-only network:
-
-<span style="color:red;">This diagram describes the original Splunk stage. The updated documentation adds an Ubuntu Wazuh manager, Windows agent 001, and manual API response testing; see the Wazuh sections below.</span>
+<span style="color:red;">The lab began with three virtual machines on an isolated host-only network, then added an Ubuntu Wazuh manager for response testing.</span>
 
 | Role | Machine | Purpose |
 |------|---------|---------|
 | SIEM | Splunk Enterprise VM | Receives, indexes, and searches all logs; runs detections and alerts |
-| Endpoint | Windows VM (monitored host) | The target being monitored and attacked; runs Sysmon + Universal Forwarder |
+| Endpoint | Windows VM (monitored host) | The target being monitored and attacked; runs Sysmon + Universal Forwarder <span style="color:red;">+ Wazuh agent 001</span> |
 | Attacker | Kali Linux VM | Launches the simulated brute-force attack with Hydra |
+| <span style="color:red;">Response manager</span> | <span style="color:red;">Ubuntu VM</span> | <span style="color:red;">Runs the Wazuh manager and API; sends responses to the Windows agent</span> |
 
 ![Lab architecture: Kali attacker to Windows endpoint (Sysmon + Universal Forwarder), forwarding logs on port 9997 to the Splunk SIEM, which fires a Discord alert](images/architecture-topology.png)
 
@@ -149,7 +148,7 @@ Dissecting the search query:
 
 <span style="color:red;">Before relying entirely on Splunk alerts, let's examine the attack from the network perspective using Wireshark.</span>
 
-Objective:  To capture the network traffic on a victim machine? That comes from a hydra attack from a linux vm?On wireshark we can see capture the traffic that goes in and out of the host, in this case the victim machine. 
+Objective:  To capture the network traffic on a victim machine? That comes from a hydra attack from a linux vm?On wireshark we can see capture the traffic that goes in and out of the host, in this case the victim machine.
 
 As you can see on the Src: 192.168.234.1 that's the ip of the machine we are currently using (victim machine)
 Now on the top part apply a display filter we'll type in tcp.port == 3389 This is so that we'll only capture traffic from the rdp as 3389 is the port responsible for rdp which is what the hydra brute force will attack,
@@ -169,7 +168,7 @@ And just as the attack happened our rdp port being monitored on wireshark sudden
 <span style="color:red;">*(See traffic surge below)*</span>
 ![Traffic surge](images/wireshark-image3.png)
 
-Alright, now there is a lot to unpack here. Let's start with the obvious ones which are the time, source, and destination columns. The time is when the packet was captured, source is where it came from in our case it's the ip address of the kali vm (attacker), destination is where its going (the victim client). 
+Alright, now there is a lot to unpack here. Let's start with the obvious ones which are the time, source, and destination columns. The time is when the packet was captured, source is where it came from in our case it's the ip address of the kali vm (attacker), destination is where its going (the victim client).
 
 We also see familiar terms on the info section such as the SYN, SYN-ACK, ACK or the three way handshake. Go gain better clarity on this we'll be using another filter.
 tcp.flags.syn == 1 && tcp.flags.ack == 0
@@ -179,8 +178,8 @@ The reason we will be using this filter is we can specifically capture the packe
 ![TCP SYN filter results 1](images/wireshark-image4.png)
 ![TCP SYN filter results 2](images/wireshark-image5.png)
 
-Here we can see the results of the filter we created. Both images are the same results I just changed the formatting of the time so I can understand it better. The top image displays the time in seconds when the packet was first captured. 
-The key finding here is that during that short timeframe which is around 118 seconds or nearly 2 minutes in we had a client try to establish connection 20 times. It's also good to note the gap between each connection attempt is around 6 seconds, so everytime the connection attempt fails a new attempt is automatically made every 6 seconds. 
+Here we can see the results of the filter we created. Both images are the same results I just changed the formatting of the time so I can understand it better. The top image displays the time in seconds when the packet was first captured.
+The key finding here is that during that short timeframe which is around 118 seconds or nearly 2 minutes in we had a client try to establish connection 20 times. It's also good to note the gap between each connection attempt is around 6 seconds, so everytime the connection attempt fails a new attempt is automatically made every 6 seconds.
 
 From here we can deduce that this patter is consistent with the behavior of automated tools such as a brute force tool like hydra. Why? Other than the massive number of attempts on a short amount of time (20 attempts in less than 2 minutes) we can also see the gap between each attempt is consistently 6 seconds, which we can't attribute to normal user behavior. This type of consistency can only be attributed to the characteristics of tools or bots. It's also important to note that all connection attempts came from the same source IP meaning that what we have is a single attacker rather than distributed traffic.
 
@@ -191,7 +190,7 @@ Through the use of the tls.handshake.type == 1 filter we can see the initial mes
 <span style="color:red;">*(See TLS handshake filter results below)*</span>
 ![TLS handshake filter results](images/wireshark-image6.png)
 
-Here we have the Conversations tool and I/O graph from the statistics tab. From the conversations tool we can see the same IP targeting the same port. And from the I/O graph we can see 20 spikes which are consistent with the brute force attempt of the attacker we observed from our filters earlier, its important to note that everything we see in the graph are all spikes which is akin to how an automated brute force tool would behave. 
+Here we have the Conversations tool and I/O graph from the statistics tab. From the conversations tool we can see the same IP targeting the same port. And from the I/O graph we can see 20 spikes which are consistent with the brute force attempt of the attacker we observed from our filters earlier, its important to note that everything we see in the graph are all spikes which is akin to how an automated brute force tool would behave.
 
 <span style="color:red;">*(See Wireshark statistics Conversations and I/O Graph below)*</span>
 ![Wireshark statistics Conversations](images/wireshark-image7.png)
@@ -285,40 +284,277 @@ Once set up, you receive a message on your Discord, and you now have a fully wor
 
 ---
 
-## Adding more Alerts and turning the homelab into a detection lab
+## <span style="color:red;">Expanding detections and documenting incidents</span>
 
-[My Splunk Homelab Documentation](docs/updated-lab-documentation.md) · [My Splunk Homelab Documentation UPDATED.docx](docs/My%20Splunk%20Homelab%20Documentation.docx)
+Lets add more on to what we currently have, it’s a good start but there is still more room for improvement and growth. Let’s start by implementing more detection rules to generate better and fine-tuned alerts that will help us with triaging incidents.
 
-<span style="color:red;">Updated documentation: six incident reports, native Wazuh marker response, and a manually requested API marker response. Automated Splunk-triggered containment is not documented as completed.</span>
+<span style="color:red;">The lab now covers six controlled scenarios. Each incident report records the detection, analysis, indicators and response considerations.</span>
 
-- [Incident Report: IR-2026-001 - RDP Brute Force with Successful Logon](docs/updated-lab-documentation.md#incident-report-ir-2026-001---rdp-brute-force-with-successful-logon)
-- [Incident Report: IR-2026-002 - Unauthorized Local Account Creation](docs/updated-lab-documentation.md#incident-report-ir-2026-002---unauthorized-local-account-creation)
-- [Incident Report: IR-2026-003 - Unauthorized Administrator Addition](docs/updated-lab-documentation.md#incident-report-ir-2026-003---unauthorized-administrator-addition)
-- [Incident Report: IR-2026-004 - Script Interpreter Spawning Shell](docs/updated-lab-documentation.md#incident-report-ir-2026-004---script-interpreter-spawning-shell)
-- [Incident Report: IR-2026-005 – Encoded Powershell](docs/updated-lab-documentation.md#incident-report-ir-2026-005--encoded-powershell)
-- [Incident Report: IR-2026-006 – Windows Even Log Cleared](docs/updated-lab-documentation.md#incident-report-ir-2026-006--windows-even-log-cleared)
+| Incident | MITRE ATT&CK |
+|---|---|
+| [IR-2026-001 - RDP Brute Force with Successful Logon](docs/updated-lab-documentation.md#incident-report-ir-2026-001---rdp-brute-force-with-successful-logon) | T1110 |
+| [IR-2026-002 - Unauthorized Local Account Creation](docs/updated-lab-documentation.md#incident-report-ir-2026-002---unauthorized-local-account-creation) | T1136.001 |
+| [IR-2026-003 - Unauthorized Administrator Addition](docs/updated-lab-documentation.md#incident-report-ir-2026-003---unauthorized-administrator-addition) | T1098 |
+| [IR-2026-004 - Script Interpreter Spawning Shell](docs/updated-lab-documentation.md#incident-report-ir-2026-004---script-interpreter-spawning-shell) | T1059.005 |
+| [IR-2026-005 – Encoded Powershell](docs/updated-lab-documentation.md#incident-report-ir-2026-005--encoded-powershell) | T1059.001 |
+| [IR-2026-006 – Windows Even Log Cleared](docs/updated-lab-documentation.md#incident-report-ir-2026-006--windows-even-log-cleared) | T1070.001 |
 
-## Testing active response with wazuh (after installation on ubuntu and connecting/forwarding wazuh logs to splunk siem)
+### <span style="color:red;">RDP brute force with successful logon</span>
 
-Alright so we have a lot to unpack here, I’ll firstly start by explaining what this entire code does and is for then go to specifics. So in its entirety the main purpose of this script is when this active response script triggers it reads the alert details that wazuh sent it, then it writes a log entry on a file called lab-marker.jsonl. Basically writing evidence that the alert ran properly which is exactly what we are trying to test here.
+```spl
+index=* source="WinEventLog:Security" (EventCode=4624 OR EventCode=4625)
+| stats
+    sum(eval(if(EventCode=4625, 1, 0))) as failures,
+    sum(eval(if(EventCode=4624, 1, 0))) as successes
+    by Account_Name, host
+| where failures > 5 AND successes > 0
+```
 
-[Proof/Images of the automated response test through generating a marker](docs/updated-lab-documentation.md#proofimages-of-the-automated-response-test-through-generating-a-marker)
+<span style="color:red;">The search counts failed and successful logons for each account and host, retaining groups with more than five failures and at least one success. Verify time order, source address and logon type in the raw events when investigating.</span>
 
-## Phase 6: API Triggered response
+![](images/updated-documentation/image-021.png)
 
-In this phase we’ll be testing if our API triggered response will work as eventually we will be needing it when asking wazuh to run a response on our monitored endpoint.
+### <span style="color:red;">New local account creation</span>
 
-Alright, now were slowly connecting everything together. If you remember earlier in this phase we created the marker and connected the endpoint alert to the wazuh active response which generated a new line on the marker file. Now what we’ll be doing is checking the connection from our SIEM which is Splunk to our XDR which is Wazuh through the API and then performing the active response. Although we are still doing things manually, we are still currently making a request to the API through powershell.
+```spl
+index=* source="WinEventLog:Security" EventCode=4720
+| rex field=Message "New Account:\s+Security ID:\s+\S+\s+Account Name:\s+(?P<Target_User_Name>\S+)"
+| rex field=Message "Subject:\s+Security ID:\s+\S+\s+Account Name:\s+(?P<Subject_User_Name>\S+)"
+| table _time, host, Target_User_Name, Subject_User_Name
+```
 
-[Reflection and Summary on this Phase:](docs/updated-lab-documentation.md#reflection-and-summary-on-this-phase)
+In testing the functionality of the alert we’ll be creating a user account on the compromised client (DESKTOP-1T4FB0H) which will simulate the attacker creating a backdoor account to maintain access to the system even if the original compromised account (CLIENT1) is disabled or the password is reset.
 
-We did a lot this phase, this is the lengthiest so far. This phase actually took me 2 days to complete, and within those 2 days I have learned a lot and I hope you did too if you ever do decide to read this and try and recreate this project of mine. We started from creating the certificated needed to actually secure the connection between our Splunk VM and the Wazuh API. It’s my first time actually doing something like this, so its expected I took long. From this I learned that these certificates are what verify the identity of the server while the user, password, and tokens are what identify the person or program that is making the request. Afterwards, we created a restricted automation account and assigned it to our monitored endpoint which was agent 001. Although currently, it might not seem much as what we did was only manual testing. But it is through this testing that we can progress forward and now that we’ve established the connection the next step if to actually make Splunk request actions from Wazuh. This definitely opened my eyes and made me understand how to these different tools SIEM and an XDR communicate and work with each other.
+![](images/updated-documentation/image-027.png)
+
+### <span style="color:red;">Administrator group membership changes</span>
+
+```spl
+index=* source="WinEventLog:Security" EventCode=4732
+| rex field=Message "Member:\s+Security ID:\s+(?P<Member_SID>S-1-\S+)"
+| rex field=Message "Subject:\s+Security ID:\s+\S+\s+Account Name:\s+(?P<Subject_User_Name>\S+)"
+| rex field=Message "Group:\s+Security ID:\s+\S+\s+Group Name:\s+(?P<Group_Name>\S+)"
+| where Group_Name="Administrators"
+| table _time, host, Member_SID, Subject_User_Name, Group_Name
+```
+
+<span style="color:red;">The test adds a local account to Administrators, then checks who performed the change and which account received membership.</span>
+
+![](images/updated-documentation/image-032.png)
+
+### <span style="color:red;">Script interpreter spawning a shell</span>
+
+```spl
+index=main source="WinEventLog:Microsoft-Windows-Sysmon/Operational"
+```
+
+<span style="color:red;">The controlled WScript test launches cmd.exe. Investigate the parent process and command line before treating similar activity as malicious in a real environment.</span>
+
+![](images/updated-documentation/image-034.png)
+
+### <span style="color:red;">Encoded PowerShell</span>
+
+```spl
+index=main source="WinEventLog:Microsoft-Windows-Sysmon/Operational"
+```
+
+<span style="color:red;">The test uses an encoded Write-Host Hello command. Base64 is encoding, not encryption; the encoded argument alone does not prove malicious intent.</span>
+
+![](images/updated-documentation/image-038.png)
+
+### <span style="color:red;">Windows Security log cleared</span>
+
+```spl
+index=* source="WinEventLog:Security" EventCode=1102
+| table _time, host, Message
+```
+
+<span style="color:red;">EventCode 1102 identifies the Security log being cleared. Previously forwarded events remain available in Splunk, providing evidence beyond the endpoint.</span>
+
+![](images/updated-documentation/image-041.png)
+
+---
+
+## <span style="color:red;">Wazuh Active Response — marker test</span>
+
+<span style="color:red;">With endpoint events reaching Splunk, the next step was to test response execution. Wazuh runs on the Ubuntu manager, while its Windows agent runs the response scripts on the monitored endpoint.</span>
+
+| Component | Machine | Purpose |
+|---|---|---|
+| `lab-marker.ps1` | Windows endpoint `192.168.234.11`, agent `001` | Writes the signature or the one that leaves the marker |
+| `lab-marker.cmd` | Same Windows endpoint | it’s the one that starts the .ps1 script |
+| `ossec.conf` | Ubuntu manager `192.168.234.132` | this is what tells wazuh when to request the marker |
+
+### <span style="color:red;">Creating the marker script</span>
+
+<span style="color:red;">On the Windows endpoint, save the following as C:\Program Files (x86)\ossec-agent\active-response\bin\lab-marker.ps1.</span>
+
+```powershell
+$ErrorActionPreference = 'Stop'
+$message = [Console]::ReadLine() | ConvertFrom-Json
+if ($message.command -ne 'add') { exit 0 }
+$record = [ordered]@{
+    time = [DateTime]::UtcNow.ToString('o')
+    action = 'marker'
+    rule = $message.parameters.alert.rule.id
+    result = 'executed'
+}
+$record | ConvertTo-Json -Compress | Add-Content -LiteralPath "$PSScriptRoot\..\lab-marker.jsonl"
+```
+
+<span style="color:red;">The script reads the JSON message from Wazuh, accepts an add command and appends the execution time, rule ID and result to lab-marker.jsonl. The output file is one folder above bin, in active-response; each execution adds a line to the same file.</span>
+
+### <span style="color:red;">Creating the launcher</span>
+
+<span style="color:red;">Save lab-marker.cmd beside the PowerShell script on the Windows endpoint.</span>
+
+```bat
+@echo off
+"%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "%~dp0lab-marker.ps1"
+```
+
+The job of this .cmd file is to start powershell and ask it to run our marker script (.ps1 file)
+
+### <span style="color:red;">Connecting the response to a detection</span>
+
+<span style="color:red;">On Ubuntu, add the command and response blocks inside ossec_config in /var/ossec/etc/ossec.conf. Rule 92002 was observed for the WScript test; agent 001 is the endpoint ID, not the detection rule ID.</span>
+
+```xml
+<command>
+  <name>lab-marker</name>
+  <executable>lab-marker.cmd</executable>
+  <timeout_allowed>no</timeout_allowed>
+</command>
+
+<active-response>
+  <disabled>no</disabled>
+  <command>lab-marker</command>
+  <location>local</location>
+  <rules_id>92002</rules_id>
+</active-response>
+```
+
+<span style="color:red;">Validate the configuration, then restart the manager only if validation succeeds.</span>
+
+```bash
+sudo /var/ossec/bin/wazuh-analysisd -t
+sudo systemctl restart wazuh-manager
+```
+
+### <span style="color:red;">Testing the response</span>
+
+<span style="color:red;">Run the WScript test again on the Windows endpoint. Inspect the new alert on Ubuntu and the corresponding Splunk result.</span>
+
+```bash
+sudo tail -f /var/ossec/logs/alerts/alerts.json
+```
+
+![](images/updated-documentation/image-048.png)
+
+<span style="color:red;">On the Windows endpoint, read the last five marker records:</span>
+
+```powershell
+Get-Content 'C:\Program Files (x86)\ossec-agent\active-response\lab-marker.jsonl' -Tail 5
+```
+
+![](images/updated-documentation/image-051.png)
+
+<span style="color:red;">A new record with rule 92002 confirms that the marker executed. The timestamps use UTC. This validates a native Wazuh response; it does not demonstrate a Splunk-triggered action or containment.</span>
+
+---
+
+## <span style="color:red;">API-triggered response from the Splunk VM</span>
+
+<span style="color:red;">After validating the native response, the next test requests the same marker through the Wazuh API from PowerShell on the Splunk VM. This request is manual; a Splunk alert does not yet initiate it.</span>
+
+| Step | Configuration |
+|---|---|
+| <span style="color:red;">HTTPS</span> | <span style="color:red;">Created a lab CA and signed an API server certificate for 192.168.234.132.</span> |
+| <span style="color:red;">Certificate trust</span> | <span style="color:red;">Configured api.yaml on Ubuntu and copied only the public CA certificate to C:\Lab\wazuh-lab-ca.pem on the Splunk VM.</span> |
+| <span style="color:red;">Authentication</span> | <span style="color:red;">Logged in to the API and obtained a temporary token.</span> |
+| <span style="color:red;">Permissions</span> | <span style="color:red;">Created splunk-response and linked its role to agent:read and active-response:command permissions for agent 001.</span> |
+| <span style="color:red;">Verification</span> | <span style="color:red;">Requested lab-marker0 and checked for a new lab-api-test record on the endpoint.</span> |
+
+### <span style="color:red;">Checking connectivity and authenticating</span>
+
+<span style="color:red;">Run these commands in PowerShell on the Windows Splunk VM, 192.168.234.10. Use the password chosen for splunk-response when prompted. The target endpoint must be online and agent 001 must be Active.</span>
+
+```powershell
+$apiBase = 'https://192.168.234.132:55000'
+$caFile = 'C:\Lab\wazuh-lab-ca.pem'
+$agentId = '001'
+Test-NetConnection 192.168.234.132 -Port 55000
+```
+
+```powershell
+$apiToken = curl.exe --ssl-revoke-best-effort --fail --silent --show-error --cacert $caFile --user 'splunk-response' -X POST "$apiBase/security/user/authenticate?raw=true"
+
+if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($apiToken)) {
+    throw 'Automation account login failed. Stop here.'
+} else {
+    Write-Host 'Automation account login succeeded.'
+}
+```
+
+```powershell
+curl.exe --ssl-revoke-best-effort --fail --silent --show-error --cacert $caFile "$apiBase/agents?agents_list=$agentId" -H "Authorization: Bearer $apiToken"
+```
+
+<span style="color:red;">The Windows curl commands use --ssl-revoke-best-effort because this lab CA does not publish revocation information. CA trust, certificate validity and server-address checks remain enabled. A 401 reply requires checking authentication, including whether the token expired.</span>
+
+![](images/updated-documentation/image-065.png)
+
+### <span style="color:red;">Building and sending the marker request</span>
+
+```powershell
+$body = @{
+    command = 'lab-marker0'
+    arguments = @()
+    alert = @{
+        rule = @{
+            id = 'lab-api-test'
+        }
+    }
+} | ConvertTo-Json -Depth 8
+```
+
+```powershell
+$bodyFile = Join-Path $env:TEMP 'wazuh-marker-request.json'
+
+[IO.File]::WriteAllText(
+    $bodyFile,
+    $body,
+    [Text.UTF8Encoding]::new($false)
+)
+```
+
+<span style="color:red;">The body selects the registered lab-marker0 response. The label lab-api-test makes the resulting marker distinguishable from the detection-triggered test; it is not a new detection rule.</span>
+
+```powershell
+curl.exe --ssl-revoke-best-effort --fail --silent --show-error --cacert $caFile -X PUT "$apiBase/active-response?agents_list=$agentId" -H "Authorization: Bearer $apiToken" -H 'Content-Type: application/json' --data-binary "@$bodyFile"
+```
+
+<span style="color:red;">The request explicitly targets agent 001. Inspect error and total_failed_items in the API response, then verify the actual endpoint output.</span>
+
+![](images/updated-documentation/image-067.png)
+
+### <span style="color:red;">Verifying execution on the endpoint</span>
+
+```powershell
+Get-Content 'C:\Program Files (x86)\ossec-agent\active-response\lab-marker.jsonl' -Tail 5
+```
+
+![](images/updated-documentation/image-069.png)
+
+And there we have it, the lab api test we made specifically as the label for our test officially made it through.
+
+<span style="color:red;">The new lab-api-test entry confirms endpoint execution after the manual API request. Automatic response requests from Splunk alerts are the next stage.</span>
 
 ---
 
 ## Key takeaways
 
-This lab demonstrates a complete detection workflow end to end: collecting endpoint telemetry (Sysmon + Windows Event Logs), forwarding it to a SIEM, writing detection logic in SPL, distinguishing an automated attack from normal user behaviour (time-clustered failure volume, not raw counts), turning that logic into a scheduled alert mapped to MITRE ATT&CK (T1110), and routing the notification to where an analyst would see it. It reflects the core skills behind SOC detection and monitoring, built hands-on in an isolated lab.
+This lab demonstrates a complete detection workflow end to end: collecting endpoint telemetry (Sysmon + Windows Event Logs), forwarding it to a SIEM, writing detection logic in SPL, distinguishing an automated attack from normal user behaviour (time-clustered failure volume, not raw counts), turning that logic into a scheduled alert mapped to MITRE ATT&CK (T1110), and routing the notification to where an analyst would see it. It reflects the core skills behind SOC detection and monitoring, built hands-on in an isolated lab. <span style="color:red;">The later stages add evidence-based incident reports, native Wazuh marker execution and a manually authenticated API request from the Splunk VM to agent 001.</span>
 
 ---
 
