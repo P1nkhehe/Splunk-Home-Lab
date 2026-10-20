@@ -322,6 +322,8 @@ index=* source="WinEventLog:Security" (EventCode=4624 OR EventCode=4625)
 
 [<span style="color:red;">Read the full investigation — timeline, analysis, IOCs and response notes</span>](docs/incidents/IR-2026-001.md)
 
+---
+
 ### <span style="color:red;">New local account creation</span>
 
 ```spl
@@ -342,6 +344,8 @@ In testing the functionality of the alert we’ll be creating a user account on 
 **<span style="color:red;">Next step:</span>** <span style="color:red;">Review the account and its creator, and restrict local account creation to authorized administrators.</span>
 
 [<span style="color:red;">Read the full investigation — timeline, analysis, IOCs and response notes</span>](docs/incidents/IR-2026-002.md)
+
+---
 
 ### <span style="color:red;">Administrator group membership changes</span>
 
@@ -365,6 +369,8 @@ index=* source="WinEventLog:Security" EventCode=4732
 **<span style="color:red;">Next step:</span>** <span style="color:red;">Review and remove unauthorized membership, and monitor changes to privileged groups.</span>
 
 [<span style="color:red;">Read the full investigation — timeline, analysis, IOCs and response notes</span>](docs/incidents/IR-2026-003.md)
+
+---
 
 ### <span style="color:red;">Script interpreter spawning a shell</span>
 
@@ -394,6 +400,8 @@ sourcetype=XmlWinEventLog
 
 [<span style="color:red;">Read the full investigation — timeline, analysis, IOCs and response notes</span>](docs/incidents/IR-2026-004.md)
 
+---
+
 ### <span style="color:red;">Encoded PowerShell</span>
 
 ```spl
@@ -421,6 +429,8 @@ sourcetype=XmlWinEventLog
 **<span style="color:red;">Next step:</span>** <span style="color:red;">Enable PowerShell Script Block Logging and investigate process ancestry and decoded content.</span>
 
 [<span style="color:red;">Read the full investigation — timeline, analysis, IOCs and response notes</span>](docs/incidents/IR-2026-005.md)
+
+---
 
 ### <span style="color:red;">Windows Security log cleared</span>
 
