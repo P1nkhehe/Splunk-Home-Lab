@@ -12,6 +12,8 @@ A hands-on security operations home lab: utilizing Splunk as a SIEM, forwarding 
 
 Three virtual machines on an isolated host-only network:
 
+<span style="color:red;">This diagram describes the original Splunk stage. The updated documentation adds an Ubuntu Wazuh manager, Windows agent 001, and manual API response testing; see the Wazuh sections below.</span>
+
 | Role | Machine | Purpose |
 |------|---------|---------|
 | SIEM | Splunk Enterprise VM | Receives, indexes, and searches all logs; runs detections and alerts |
@@ -280,6 +282,37 @@ Dissecting the script:
 Once set up, you receive a message on your Discord, and you now have a fully working alert notification system.
 
 ![Splunk alert delivered to the #splunk-alert Discord channel](images/17-discord-alert-received.png)
+
+---
+
+## Adding more Alerts and turning the homelab into a detection lab
+
+[My Splunk Homelab Documentation](docs/updated-lab-documentation.md) · [My Splunk Homelab Documentation UPDATED.docx](docs/My%20Splunk%20Homelab%20Documentation.docx)
+
+<span style="color:red;">Updated documentation: six incident reports, native Wazuh marker response, and a manually requested API marker response. Automated Splunk-triggered containment is not documented as completed.</span>
+
+- [Incident Report: IR-2026-001 - RDP Brute Force with Successful Logon](docs/updated-lab-documentation.md#incident-report-ir-2026-001---rdp-brute-force-with-successful-logon)
+- [Incident Report: IR-2026-002 - Unauthorized Local Account Creation](docs/updated-lab-documentation.md#incident-report-ir-2026-002---unauthorized-local-account-creation)
+- [Incident Report: IR-2026-003 - Unauthorized Administrator Addition](docs/updated-lab-documentation.md#incident-report-ir-2026-003---unauthorized-administrator-addition)
+- [Incident Report: IR-2026-004 - Script Interpreter Spawning Shell](docs/updated-lab-documentation.md#incident-report-ir-2026-004---script-interpreter-spawning-shell)
+- [Incident Report: IR-2026-005 – Encoded Powershell](docs/updated-lab-documentation.md#incident-report-ir-2026-005--encoded-powershell)
+- [Incident Report: IR-2026-006 – Windows Even Log Cleared](docs/updated-lab-documentation.md#incident-report-ir-2026-006--windows-even-log-cleared)
+
+## Testing active response with wazuh (after installation on ubuntu and connecting/forwarding wazuh logs to splunk siem)
+
+Alright so we have a lot to unpack here, I’ll firstly start by explaining what this entire code does and is for then go to specifics. So in its entirety the main purpose of this script is when this active response script triggers it reads the alert details that wazuh sent it, then it writes a log entry on a file called lab-marker.jsonl. Basically writing evidence that the alert ran properly which is exactly what we are trying to test here.
+
+[Proof/Images of the automated response test through generating a marker](docs/updated-lab-documentation.md#proofimages-of-the-automated-response-test-through-generating-a-marker)
+
+## Phase 6: API Triggered response
+
+In this phase we’ll be testing if our API triggered response will work as eventually we will be needing it when asking wazuh to run a response on our monitored endpoint.
+
+Alright, now were slowly connecting everything together. If you remember earlier in this phase we created the marker and connected the endpoint alert to the wazuh active response which generated a new line on the marker file. Now what we’ll be doing is checking the connection from our SIEM which is Splunk to our XDR which is Wazuh through the API and then performing the active response. Although we are still doing things manually, we are still currently making a request to the API through powershell.
+
+[Reflection and Summary on this Phase:](docs/updated-lab-documentation.md#reflection-and-summary-on-this-phase)
+
+We did a lot this phase, this is the lengthiest so far. This phase actually took me 2 days to complete, and within those 2 days I have learned a lot and I hope you did too if you ever do decide to read this and try and recreate this project of mine. We started from creating the certificated needed to actually secure the connection between our Splunk VM and the Wazuh API. It’s my first time actually doing something like this, so its expected I took long. From this I learned that these certificates are what verify the identity of the server while the user, password, and tokens are what identify the person or program that is making the request. Afterwards, we created a restricted automation account and assigned it to our monitored endpoint which was agent 001. Although currently, it might not seem much as what we did was only manual testing. But it is through this testing that we can progress forward and now that we’ve established the connection the next step if to actually make Splunk request actions from Wazuh. This definitely opened my eyes and made me understand how to these different tools SIEM and an XDR communicate and work with each other.
 
 ---
 
