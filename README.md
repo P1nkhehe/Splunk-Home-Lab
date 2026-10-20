@@ -288,16 +288,16 @@ Once set up, you receive a message on your Discord, and you now have a fully wor
 
 Lets add more on to what we currently have, it’s a good start but there is still more room for improvement and growth. Let’s start by implementing more detection rules to generate better and fine-tuned alerts that will help us with triaging incidents.
 
-<span style="color:red;">The lab now covers six controlled scenarios. Each incident report records the detection, analysis, indicators and response considerations.</span>
+<span style="color:red;">The six tests below follow the simulated attack chain from initial access to log clearing. Each example shows the detection, observed result, interpretation and next step. The table opens a separate report for each incident, with its timeline, analysis, IOCs and response notes.</span>
 
 | Incident | MITRE ATT&CK |
 |---|---|
-| [IR-2026-001 - RDP Brute Force with Successful Logon](docs/updated-lab-documentation.md#incident-report-ir-2026-001---rdp-brute-force-with-successful-logon) | T1110 |
-| [IR-2026-002 - Unauthorized Local Account Creation](docs/updated-lab-documentation.md#incident-report-ir-2026-002---unauthorized-local-account-creation) | T1136.001 |
-| [IR-2026-003 - Unauthorized Administrator Addition](docs/updated-lab-documentation.md#incident-report-ir-2026-003---unauthorized-administrator-addition) | T1098 |
-| [IR-2026-004 - Script Interpreter Spawning Shell](docs/updated-lab-documentation.md#incident-report-ir-2026-004---script-interpreter-spawning-shell) | T1059.005 |
-| [IR-2026-005 – Encoded Powershell](docs/updated-lab-documentation.md#incident-report-ir-2026-005--encoded-powershell) | T1059.001 |
-| [IR-2026-006 – Windows Even Log Cleared](docs/updated-lab-documentation.md#incident-report-ir-2026-006--windows-even-log-cleared) | T1070.001 |
+| [IR-2026-001 - RDP Brute Force with Successful Logon](docs/incidents/IR-2026-001.md) | T1110 |
+| [IR-2026-002 - Unauthorized Local Account Creation](docs/incidents/IR-2026-002.md) | T1136.001 |
+| [IR-2026-003 - Unauthorized Administrator Addition](docs/incidents/IR-2026-003.md) | T1098 |
+| [IR-2026-004 - Script Interpreter Spawning Shell](docs/incidents/IR-2026-004.md) | T1059.005 |
+| [IR-2026-005 – Encoded Powershell](docs/incidents/IR-2026-005.md) | T1059.001 |
+| [IR-2026-006 – Windows Even Log Cleared](docs/incidents/IR-2026-006.md) | T1070.001 |
 
 ### <span style="color:red;">RDP brute force with successful logon</span>
 
@@ -314,6 +314,14 @@ index=* source="WinEventLog:Security" (EventCode=4624 OR EventCode=4625)
 
 ![](images/updated-documentation/image-021.png)
 
+**<span style="color:red;">Observed result:</span>** <span style="color:red;">The test recorded nine failed logons and one successful logon for CLIENT1 on DESKTOP-1T4FB0H.</span>
+
+**<span style="color:red;">What it means:</span>** <span style="color:red;">The pattern is consistent with the simulated password-guessing test. The SPL counts alone do not prove event order or that all successful logons belong to the attacker; correlate the raw events.</span>
+
+**<span style="color:red;">Next step:</span>** <span style="color:red;">Implement an account lockout policy and investigate the successful logon.</span>
+
+[<span style="color:red;">Read the full investigation — timeline, analysis, IOCs and response notes</span>](docs/incidents/IR-2026-001.md)
+
 ### <span style="color:red;">New local account creation</span>
 
 ```spl
@@ -326,6 +334,14 @@ index=* source="WinEventLog:Security" EventCode=4720
 In testing the functionality of the alert we’ll be creating a user account on the compromised client (DESKTOP-1T4FB0H) which will simulate the attacker creating a backdoor account to maintain access to the system even if the original compromised account (CLIENT1) is disabled or the password is reset.
 
 ![](images/updated-documentation/image-027.png)
+
+**<span style="color:red;">Observed result:</span>** <span style="color:red;">The test created the local account hacker on DESKTOP-1T4FB0H using CLIENT1.</span>
+
+**<span style="color:red;">What it means:</span>** <span style="color:red;">Account creation after the simulated compromise demonstrates a possible persistence step. Event 4720 establishes creation; authorization must be checked separately.</span>
+
+**<span style="color:red;">Next step:</span>** <span style="color:red;">Review the account and its creator, and restrict local account creation to authorized administrators.</span>
+
+[<span style="color:red;">Read the full investigation — timeline, analysis, IOCs and response notes</span>](docs/incidents/IR-2026-002.md)
 
 ### <span style="color:red;">Administrator group membership changes</span>
 
@@ -342,25 +358,69 @@ index=* source="WinEventLog:Security" EventCode=4732
 
 ![](images/updated-documentation/image-032.png)
 
+**<span style="color:red;">Observed result:</span>** <span style="color:red;">The lab test added the previously created hacker account to the local Administrators group.</span>
+
+**<span style="color:red;">What it means:</span>** <span style="color:red;">The membership change demonstrates the privilege-escalation step in this simulated chain. Correlate the member SID with the account-creation event.</span>
+
+**<span style="color:red;">Next step:</span>** <span style="color:red;">Review and remove unauthorized membership, and monitor changes to privileged groups.</span>
+
+[<span style="color:red;">Read the full investigation — timeline, analysis, IOCs and response notes</span>](docs/incidents/IR-2026-003.md)
+
 ### <span style="color:red;">Script interpreter spawning a shell</span>
 
 ```spl
 index=main source="WinEventLog:Microsoft-Windows-Sysmon/Operational"
+sourcetype=XmlWinEventLog
+| spath path=Event.System.EventID output=sysmon_event_id
+| rex field=_raw "<Data Name=['\"]ParentImage['\"]>(?<parent_image>[^<]*)</Data>"
+| rex field=_raw "<Data Name=['\"]Image['\"]>(?<process_image>[^<]*)</Data>"
+| rex field=_raw "<Data Name=['\"]CommandLine['\"]>(?<process_command_line>[^<]*)</Data>"
+| where sysmon_event_id="1"
+    AND match(parent_image, "(?i)wscript[.]exe$")
+    AND match(process_image, "(?i)(cmd|powershell)[.]exe$")
+| table _time host parent_image process_image process_command_line
+| sort - _time
 ```
 
 <span style="color:red;">The controlled WScript test launches cmd.exe. Investigate the parent process and command line before treating similar activity as malicious in a real environment.</span>
 
 ![](images/updated-documentation/image-034.png)
 
+**<span style="color:red;">Observed result:</span>** <span style="color:red;">The process-creation event showed wscript.exe starting cmd.exe during the VBScript test.</span>
+
+**<span style="color:red;">What it means:</span>** <span style="color:red;">The parent-child relationship identifies the behavior being tested. Legitimate scripts can also launch a shell, so investigate script content and context before classifying real activity.</span>
+
+**<span style="color:red;">Next step:</span>** <span style="color:red;">Inspect the script and command line; restrict Windows Script Host where it is not required.</span>
+
+[<span style="color:red;">Read the full investigation — timeline, analysis, IOCs and response notes</span>](docs/incidents/IR-2026-004.md)
+
 ### <span style="color:red;">Encoded PowerShell</span>
 
 ```spl
 index=main source="WinEventLog:Microsoft-Windows-Sysmon/Operational"
+sourcetype=XmlWinEventLog
+| spath path=Event.System.EventID output=sysmon_event_id
+| rex field=_raw "<Data Name=['\"]Image['\"]>(?<process_image>[^<]*)</Data>"
+| rex field=_raw "<Data Name=['\"]CommandLine['\"]>(?<process_command_line>[^<]*)</Data>"
+| rex field=_raw "<Data Name=['\"]ParentImage['\"]>(?<parent_image>[^<]*)</Data>"
+| where sysmon_event_id="1"
+    AND match(process_image, "(?i)powershell[.]exe$")
+    AND match(process_command_line, "(?i)-enc")
+| table _time host process_image process_command_line parent_image
+| sort - _time
 ```
 
 <span style="color:red;">The test uses an encoded Write-Host Hello command. Base64 is encoding, not encryption; the encoded argument alone does not prove malicious intent.</span>
 
 ![](images/updated-documentation/image-038.png)
+
+**<span style="color:red;">Observed result:</span>** <span style="color:red;">The test launched PowerShell with -enc and a Base64-encoded Write-Host Hello command.</span>
+
+**<span style="color:red;">What it means:</span>** <span style="color:red;">The search detects encoded PowerShell usage, including this harmless test. Encoding alone does not establish malicious intent; decode and inspect the command.</span>
+
+**<span style="color:red;">Next step:</span>** <span style="color:red;">Enable PowerShell Script Block Logging and investigate process ancestry and decoded content.</span>
+
+[<span style="color:red;">Read the full investigation — timeline, analysis, IOCs and response notes</span>](docs/incidents/IR-2026-005.md)
 
 ### <span style="color:red;">Windows Security log cleared</span>
 
@@ -372,6 +432,16 @@ index=* source="WinEventLog:Security" EventCode=1102
 <span style="color:red;">EventCode 1102 identifies the Security log being cleared. Previously forwarded events remain available in Splunk, providing evidence beyond the endpoint.</span>
 
 ![](images/updated-documentation/image-041.png)
+
+**<span style="color:red;">Observed result:</span>** <span style="color:red;">The endpoint generated EventCode 1102 after its Security log was cleared; earlier forwarded events remained in Splunk.</span>
+
+**<span style="color:red;">What it means:</span>** <span style="color:red;">The alert identifies log clearing and demonstrates the value of central evidence. It does not prove malicious intent by itself or recover events that were never forwarded.</span>
+
+**<span style="color:red;">Next step:</span>** <span style="color:red;">Preserve central evidence, establish who cleared the log and review forwarding coverage.</span>
+
+[<span style="color:red;">Read the full investigation — timeline, analysis, IOCs and response notes</span>](docs/incidents/IR-2026-006.md)
+
+<span style="color:red;">These detections made the activity visible, but alerts alone do not execute a response. The next stage tests whether Wazuh can run a harmless action on the endpoint before moving to containment.</span>
 
 ---
 
